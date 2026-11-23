@@ -1,6 +1,8 @@
 package com.example.pagos;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,12 +12,24 @@ public class WebhookController {
     @Autowired
     PagoRepository repo;
 
+    // para no procesar dos veces el mismo evento
+    Set<String> eventosProcesados = new HashSet<>();
+
     @PostMapping("/webhook")
     public String recibir(@RequestBody Map<String, Object> body) {
+        String eventId = (String) body.get("event_id");
+        if (eventosProcesados.contains(eventId)) {
+            return "ok";
+        }
+        eventosProcesados.add(eventId);
+
         String id = (String) body.get("payment_id");
         Pago p = repo.findById(id).orElse(new Pago());
         p.setPaymentId(id);
-        p.setStatus((String) body.get("status"));
+        // si ya esta en un estado final no lo cambio
+        if (p.getStatus() == null || !p.getStatus().equals("CAPTURED")) {
+            p.setStatus((String) body.get("status"));
+        }
         p.setAmount(Double.valueOf(body.get("amount").toString()));
         p.setCurrency((String) body.get("currency"));
         repo.save(p);
